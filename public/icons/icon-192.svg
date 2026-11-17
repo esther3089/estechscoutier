@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2F6B2F"/>
+      <stop offset="100%" stop-color="#1B431B"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A7F3D0"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="44" fill="url(#bgGrad)"/>
+  <!-- Envelope body -->
+  <rect x="36" y="52" width="120" height="88" rx="14" fill="#ffffff" opacity="0.12"/>
+  <rect x="40" y="56" width="112" height="80" rx="12" fill="#ffffff"/>
+  <!-- Envelope flap lines -->
+  <path d="M42 60 L96 104 L150 60" fill="none" stroke="#2F6B2F" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Scoutier paper plane / bolt -->
+  <path d="M72 110 L140 76 L108 124 L96 106 Z" fill="url(#accentGrad)" stroke="#1B431B" stroke-width="3" stroke-linejoin="round"/>
+  <!-- Star accent -->
+  <circle cx="146" cy="46" r="8" fill="#FBBF24"/>
+</svg>
+

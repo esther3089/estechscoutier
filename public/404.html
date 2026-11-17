@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EstechScoutier - Redirecting...</title>
+    <script>
+      // GitHub Pages SPA Redirect to handle refreshes and direct links
+      var pathname = window.location.pathname;
+      var repo = '/estechscoutier/';
+      if (pathname.indexOf(repo) === 0) {
+        var sub = pathname.slice(repo.length);
+        if (sub) {
+          window.location.replace(repo + '#' + sub);
+        } else {
+          window.location.replace(repo);
+        }
+      } else {
+        window.location.replace('/estechscoutier/');
+      }
+    </script>
+  </head>
+  <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+    Redirecting to EstechScoutier...
+  </body>
+</html>
