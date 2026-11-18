@@ -1,4 +1,4 @@
-const CACHE_NAME = 'estech-scoutier-v1';
+const CACHE_NAME = 'estech-scoutier-v3';
 
 self.addEventListener('install', (event) => {
   const scope = self.registration.scope;
@@ -6,6 +6,8 @@ self.addEventListener('install', (event) => {
     scope,
     new URL('index.html', scope).href,
     new URL('manifest.webmanifest', scope).href,
+    new URL('icons/icon-192.png', scope).href,
+    new URL('icons/icon-512.png', scope).href,
     new URL('icons/icon-192.svg', scope).href,
     new URL('icons/icon-512.svg', scope).href
   ];

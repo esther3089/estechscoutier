@@ -77,6 +77,9 @@ interface AppContextValue {
   showResponsibleUseModal: boolean;
   setShowResponsibleUseModal: (show: boolean) => void;
   scrollToForm: () => void;
+  isInstallable: boolean;
+  isInstalled: boolean;
+  installApp: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -126,6 +129,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showResponsibleUseModal, setShowResponsibleUseModal] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return (
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (navigator as unknown as { standalone?: boolean }).standalone === true
+      );
+    }
+    return false;
+  });
 
   // Initialize theme on HTML root element
   useEffect(() => {
@@ -175,6 +188,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  // Listen for PWA installation prompts
+  useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+      addToast('success', 'EScoutier was installed successfully!');
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, [addToast]);
+
+  const installApp = useCallback(async () => {
+    if (!deferredPrompt) {
+      addToast('info', 'To install on this device, open your browser menu and choose "Install App" or "Add to Home Screen".');
+      return;
+    }
+    try {
+      await deferredPrompt.prompt();
+      const choiceResult = await deferredPrompt.userChoice;
+      if (choiceResult && choiceResult.outcome === 'accepted') {
+        addToast('success', 'Installing EScoutier...');
+        setDeferredPrompt(null);
+      } else {
+        addToast('info', 'Installation was cancelled');
+      }
+    } catch (err) {
+      console.error('PWA install error:', err);
+    }
+  }, [deferredPrompt, addToast]);
 
   const updateSettings = useCallback((partial: Partial<AppSettings>) => {
     setSettingsState((prev) => {
@@ -360,6 +414,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showResponsibleUseModal,
     setShowResponsibleUseModal,
     scrollToForm,
+    isInstallable: !!deferredPrompt && !isInstalled,
+    isInstalled,
+    installApp,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

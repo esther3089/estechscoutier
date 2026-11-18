@@ -12,6 +12,7 @@ import {
   Settings as SettingsIcon,
   CheckCheck,
   Clock,
+  Download,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -24,6 +25,9 @@ export const Header: React.FC = () => {
     setIsSettingsOpen,
     addToast,
     refreshStats,
+    isInstallable,
+    isInstalled,
+    installApp,
   } = useApp();
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -143,6 +147,18 @@ export const Header: React.FC = () => {
             <span className="text-amber-200">{stats.remaining}</span>
           </div>
 
+          {/* Quick Install Button if installable */}
+          {isInstallable && (
+            <button
+              onClick={installApp}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs shadow-sm transition-transform active:scale-95 animate-pulse"
+              title="Install EScoutier App"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Install App</span>
+            </button>
+          )}
+
           {/* Theme switcher button */}
           <div className="relative" ref={themeRef}>
             <button
@@ -228,6 +244,19 @@ export const Header: React.FC = () => {
                   <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                   <span>Copy Link</span>
                 </button>
+
+                {!isInstalled && (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      installApp();
+                    }}
+                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors text-emerald-700 dark:text-emerald-400 font-semibold"
+                  >
+                    <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Install App</span>
+                  </button>
+                )}
 
                 <div className="border-t border-slate-200 dark:border-slate-800 my-1"></div>
 

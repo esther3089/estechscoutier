@@ -15,10 +15,11 @@ import {
   WorkerInputMessage,
   WorkerOutputMessage,
   extractNameFromEmail,
-  capitalize,
-} from '../../workers/listProcessor.worker';
-
-const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+  processEmailList,
+  ProcessListResult,
+  EMAIL_REGEX,
+} from '../../utils/listProcessor';
+import ListProcessorWorker from '../../workers/listProcessor.worker?worker';
 
 export const BulkMailForm: React.FC = () => {
   const {
@@ -136,7 +137,7 @@ export const BulkMailForm: React.FC = () => {
     settings.optOutText,
   ]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (validationStats.total > 10000) {
       addToast(
         'error',
@@ -163,80 +164,121 @@ export const BulkMailForm: React.FC = () => {
     setIsGenerating(true);
     setGenerationProgress(5);
 
+    const onComplete = (result: ProcessListResult) => {
+      setGenerationProgress(100);
+      applyGeneratedList(result.items);
+      setIsGenerating(false);
+
+      // Confetti burst
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 60,
+          origin: { y: 0.6 },
+          colors: ['#2F6B2F', '#5B21B6', '#14B8A6', '#F59E0B'],
+        });
+      } catch (e) {
+        console.warn('Confetti trigger failed:', e);
+      }
+
+      const dupNotice =
+        result.stats.duplicateCount > 0
+          ? ` (${result.stats.duplicateCount} duplicate${
+              result.stats.duplicateCount > 1 ? 's' : ''
+            } removed)`
+          : '';
+      const dncNotice =
+        result.stats.doNotContactSkipped > 0
+          ? ` (${result.stats.doNotContactSkipped} suppressed)`
+          : '';
+
+      addToast(
+        'success',
+        `Generated ${result.items.length.toLocaleString()} ready-to-send emails!${dupNotice}${dncNotice}`
+      );
+
+      // Scroll to generated list
+      setTimeout(() => {
+        const listElem = document.getElementById('generated-emails-card');
+        if (listElem) {
+          listElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 300);
+    };
+
+    const runMainThreadProcessing = async () => {
+      try {
+        const result = await processEmailList({
+          rawRecipients: draft.recipients,
+          subjectTemplate: draft.subject,
+          bodyTemplate: draft.body,
+          fallbackName: settings.fallbackName || 'there',
+          doNotContactList: settings.doNotContactList,
+          enableOptOutFooter: settings.enableOptOutFooter,
+          optOutText: settings.optOutText,
+          onProgress: (progress) => {
+            setGenerationProgress(progress);
+          },
+        });
+        onComplete(result);
+      } catch (err: unknown) {
+        setIsGenerating(false);
+        addToast(
+          'error',
+          err instanceof Error
+            ? err.message
+            : 'An error occurred during list processing.'
+        );
+      }
+    };
+
     // Terminate existing worker if any
     if (workerRef.current) {
       workerRef.current.terminate();
+      workerRef.current = null;
     }
 
-    // Initialize Web Worker
-    const worker = new Worker(
-      new URL('../../workers/listProcessor.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
-    workerRef.current = worker;
+    // Try processing in Web Worker first for best UI responsiveness
+    let worker: Worker | null = null;
+    try {
+      worker = new ListProcessorWorker();
+      workerRef.current = worker;
+    } catch (e) {
+      console.warn('Could not initialize Web Worker, falling back to main thread:', e);
+      await runMainThreadProcessing();
+      return;
+    }
 
     worker.onmessage = (e: MessageEvent<WorkerOutputMessage>) => {
       const msg = e.data;
+      if (!msg) return;
 
       if (msg.type === 'progress') {
         setGenerationProgress(msg.progress);
       } else if (msg.type === 'complete') {
-        setGenerationProgress(100);
-        applyGeneratedList(msg.items);
-        setIsGenerating(false);
-
-        // Confetti burst
-        try {
-          confetti({
-            particleCount: 80,
-            spread: 60,
-            origin: { y: 0.6 },
-            colors: ['#2F6B2F', '#5B21B6', '#14B8A6', '#F59E0B'],
-          });
-        } catch (e) {
-          console.warn('Confetti trigger failed:', e);
+        onComplete({ items: msg.items, stats: msg.stats });
+        if (workerRef.current) {
+          workerRef.current.terminate();
+          workerRef.current = null;
         }
-
-        const dupNotice =
-          msg.stats.duplicateCount > 0
-            ? ` (${msg.stats.duplicateCount} duplicate${
-                msg.stats.duplicateCount > 1 ? 's' : ''
-              } removed)`
-            : '';
-        const dncNotice =
-          msg.stats.doNotContactSkipped > 0
-            ? ` (${msg.stats.doNotContactSkipped} suppressed)`
-            : '';
-
-        addToast(
-          'success',
-          `Generated ${msg.items.length.toLocaleString()} ready-to-send emails!${dupNotice}${dncNotice}`
-        );
-
-        // Scroll to generated list
-        setTimeout(() => {
-          const listElem = document.getElementById('generated-emails-card');
-          if (listElem) {
-            listElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        }, 300);
-
-        worker.terminate();
-        workerRef.current = null;
       } else if (msg.type === 'error') {
         setIsGenerating(false);
         addToast('error', msg.message);
-        worker.terminate();
-        workerRef.current = null;
+        if (workerRef.current) {
+          workerRef.current.terminate();
+          workerRef.current = null;
+        }
       }
     };
 
-    worker.onerror = (err) => {
-      setIsGenerating(false);
-      console.error('Worker error:', err);
-      addToast('error', 'An error occurred during list processing.');
-      worker.terminate();
-      workerRef.current = null;
+    worker.onerror = async (err) => {
+      console.warn('Worker execution failed, seamlessly falling back to main thread:', err);
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+      // Seamlessly process on the main thread so user experiences no disruption
+      await runMainThreadProcessing();
     };
 
     const workerPayload: WorkerInputMessage = {
@@ -250,7 +292,16 @@ export const BulkMailForm: React.FC = () => {
       optOutText: settings.optOutText,
     };
 
-    worker.postMessage(workerPayload);
+    try {
+      worker.postMessage(workerPayload);
+    } catch (postErr) {
+      console.warn('postMessage failed, running fallback:', postErr);
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+      await runMainThreadProcessing();
+    }
   };
 
   return (

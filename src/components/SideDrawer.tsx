@@ -13,6 +13,7 @@ import {
   Heart,
   ExternalLink,
   ShieldCheck,
+  Download,
 } from 'lucide-react';
 import { useApp, NavTab } from '../context/AppContext';
 
@@ -26,6 +27,8 @@ export const SideDrawer: React.FC = () => {
     updateSettings,
     setIsSettingsOpen,
     setShowResponsibleUseModal,
+    installApp,
+    isInstalled,
   } = useApp();
 
   if (!isDrawerOpen) return null;
